@@ -10,8 +10,13 @@ async function seed() {
   console.log('🧹 System-Reset v8.0...');
 
   // 1. Konten
-  const [giro] = await db.insert(accounts).values({ name: 'Girokonto', type: 'checking', color: '#ffffff' }).returning();
-  const [depot] = await db.insert(accounts).values({ name: 'Depot', type: 'investment', color: '#52525b' }).returning();
+  const [giro] = await db.insert(accounts).values({ 
+    name: 'Girokonto' 
+    // type und color wurden hier entfernt, da sie im Schema fehlen
+  }).returning();
+  const [depot] = await db.insert(accounts).values({ 
+    name: 'Depot'
+  }).returning();
 
   // 2. Hauptkategorien
   const [housing] = await db.insert(categories).values({ name: 'Wohnen', icon: '🏠' }).returning();
