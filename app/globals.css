@@ -1,26 +1,44 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-border: hsl(var(--border));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-3xl: 2.5rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Hardcore Monochrome Dark Mode als Standard */
+    --background: 240 10% 3.9%;      /* Tiefes Anthrazit */
+    --foreground: 0 0% 98%;          /* Weißer Text */
+    --card: 240 10% 6%;              /* Etwas hellere Karten */
+    --card-foreground: 0 0% 98%;
+    --border: 240 5% 15%;            /* Dezente Ränder */
+    --primary: 0 0% 98%;             /* Weiß für wichtige Akzente */
+    --primary-foreground: 240 5.9% 10%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 240 5% 65%;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    /* Verhindert das "Scroll-Bouncing" in Weiß auf manchen Browsern */
+    overscroll-behavior: none;
+  }
 }
