@@ -1,11 +1,16 @@
-// drizzle.config.ts
-import { defineConfig } from "drizzle-kit";
+import { defineConfig } from 'drizzle-kit';
+import * as dotenv from 'dotenv';
+
+// Lädt die .env Datei
+dotenv.config();
 
 export default defineConfig({
-  schema: "./db/schema.ts",
-  out: "./drizzle",
-  dialect: "postgresql",
+  schema: './db/schema.ts',
+  out: './drizzle',
+  driver: 'pg',
   dbCredentials: {
-    url: "postgresql://nils:financepassword@localhost:5432/finance_db",
+    connectionString: process.env.DATABASE_URL!,
   },
+  verbose: true,
+  strict: true,
 });

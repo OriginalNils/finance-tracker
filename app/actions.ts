@@ -156,7 +156,8 @@ export async function importTransactions(transactionsList: any[]) {
     receiverIban: t.receiverIban || null,
     details: t.details || null,
     amount: t.amount,
-    type: t.amount < 0 ? 'expense' : 'income',
+    // HIER DIE ÄNDERUNG: "as const" oder expliziter Type-Cast
+    type: (t.amount < 0 ? 'expense' : 'income') as 'expense' | 'income', 
     date: new Date(t.date),
   })));
 
