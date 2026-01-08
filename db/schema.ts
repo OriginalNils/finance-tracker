@@ -7,6 +7,7 @@ import {
   doublePrecision, 
   integer // <--- DIESES WORT HINZUFÜGEN
 } from "drizzle-orm/pg-core";
+
 export const accounts = pgTable('accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: text('name').notNull(),
@@ -44,4 +45,15 @@ export const budgets = pgTable('budgets', {
     .notNull()
     .unique(),
   limitAmount: doublePrecision('limit_amount').notNull(),
+});
+
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  amount: doublePrecision('amount').notNull(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
+  categoryId: uuid('category_id').references(() => categories.id).notNull(),
+  interval: text('interval').notNull(), // 'monthly', 'yearly', etc.
+  startDate: timestamp('start_date').defaultNow().notNull(),
+  lastExecuted: timestamp('last_executed'),
 });

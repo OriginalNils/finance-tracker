@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { transactions, budgets, accounts, categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { subscriptions as subTable } from "@/db/schema";
 
 // --- KONTEN (ACCOUNTS) ---
 export async function addAccount(formData: FormData) {
@@ -205,5 +206,20 @@ export async function reorderAccounts(orderedIds: string[]) {
       .set({ sortOrder: i })
       .where(eq(accounts.id, orderedIds[i]));
   }
+  revalidatePath("/");
+}
+
+export async function addSubscription(formData: FormData) {
+  const amount = parseFloat(formData.get("amount") as string);
+  
+  await db.insert(subTable).values({
+    name: formData.get("name") as string,
+    amount: amount,
+    accountId: formData.get("accountId") as string,
+    categoryId: formData.get("categoryId") as string,
+    interval: formData.get("interval") as string || 'monthly',
+    startDate: new Date(formData.get("startDate") as string || new Date()),
+  });
+
   revalidatePath("/");
 }
