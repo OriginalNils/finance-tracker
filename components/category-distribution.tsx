@@ -6,6 +6,9 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 interface DataItem {
   name: string;
   value: number;
+  fill?: string;
+  // Das hier ist die "Index-Signatur", die TypeScript vermisst:
+  [key: string]: any; 
 }
 
 // Eine saubere, monochrome Palette für den Stealth-Look
