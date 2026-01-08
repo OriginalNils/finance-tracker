@@ -5,7 +5,8 @@ import {
   text, 
   timestamp, 
   doublePrecision, 
-  integer // <--- DIESES WORT HINZUFÜGEN
+  integer,
+  AnyPgColumn // <--- DIESEN TYP HINZUFÜGEN
 } from "drizzle-orm/pg-core";
 
 export const accounts = pgTable('accounts', {
