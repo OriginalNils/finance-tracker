@@ -223,3 +223,31 @@ export async function addSubscription(formData: FormData) {
 
   revalidatePath("/");
 }
+
+export async function addSplit(formData: FormData) {
+  // Wir extrahieren die Basisdaten
+  const accountId = formData.get("accountId") as string;
+  const date = new Date(formData.get("date") as string || new Date());
+  const description = formData.get("description") as string;
+
+  // Die Teilbuchungen kommen oft als JSON-String oder indexierte Felder
+  // Hier ein robustes Beispiel für die Verarbeitung:
+  const splitDataRaw = formData.get("splits") as string;
+  const splits = JSON.parse(splitDataRaw) as Array<{ categoryId: string, amount: number }>;
+
+  // Wir erstellen für jeden Teil des Splits eine eigene Buchung
+  const transactionsToInsert = splits.map(s => ({
+    accountId,
+    categoryId: s.categoryId,
+    description: `${description} (Teilbetrag)`,
+    amount: s.amount,
+    type: s.amount < 0 ? 'expense' : 'income' as 'expense' | 'income',
+    date: date,
+  }));
+
+  if (transactionsToInsert.length > 0) {
+    await db.insert(transactions).values(transactionsToInsert);
+  }
+
+  revalidatePath("/");
+}
