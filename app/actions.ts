@@ -2,6 +2,7 @@
 'use server'
 
 import { db } from "@/db";
+import { auth } from "@/auth";
 import { transactions, budgets, bankAccounts as accounts, categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
