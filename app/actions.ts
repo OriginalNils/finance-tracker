@@ -9,28 +9,34 @@ import { subscriptions as subTable } from "@/db/schema";
 
 // --- KONTEN (ACCOUNTS) ---
 export async function addAccount(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   const name = formData.get("name") as string;
   const initialBalance = parseFloat(formData.get("initialBalance") as string) || 0;
 
   // 1. Konto erstellen
   const [newAccount] = await db.insert(accounts).values({
     name: name,
+    userId: session.user.id, // <-- HINZUGEFÜGT!
   }).returning();
 
   // 2. Wenn ein Startguthaben eingegeben wurde, erste Buchung erstellen
   if (initialBalance !== 0) {
-    // Wir suchen eine Standard-Kategorie wie "Transfer" oder "Import"
-    const allCats = await db.select().from(categories);
+    const allCats = await db.select().from(categories).where(eq(categories.userId, session.user.id));
     const defaultCat = allCats.find(c => c.name === 'Import') || allCats[0];
 
-    await db.insert(transactions).values({
-      accountId: newAccount.id,
-      categoryId: defaultCat.id,
-      description: "Startguthaben",
-      amount: initialBalance,
-      type: initialBalance >= 0 ? 'income' : 'expense',
-      date: new Date(),
-    });
+    if (defaultCat) {
+      await db.insert(transactions).values({
+        accountId: newAccount.id,
+        categoryId: defaultCat.id,
+        description: "Startguthaben",
+        amount: initialBalance,
+        type: initialBalance >= 0 ? 'income' : 'expense',
+        date: new Date(),
+        userId: session.user.id, // <-- HINZUGEFÜGT!
+      });
+    }
   }
 
   revalidatePath("/");
