@@ -1,22 +1,21 @@
 // app/page.tsx
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { 
   transactions as transTable, 
   budgets as budgetTable, 
-  accounts as accountTable, 
+  bankAccounts as accountTable, 
   categories as catTable 
 } from "@/db/schema";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, eq, and } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
 import { 
   LayoutDashboard, 
   Trash2, 
   PieChart as PieIcon, 
   Target, 
-  Activity,
-  TrendingUp,
   User,
-  Calendar
 } from "lucide-react";
 
 // Komponenten-Imports
@@ -26,14 +25,13 @@ import { AddCategoryDialog } from "@/components/add-category-dialog";
 import { AddBudgetDialog } from "@/components/add-budget-dialog";
 import { BudgetItem } from "@/components/budget-item";
 import { TrendChart } from "@/components/trend-chart";
-import { MonthlyNetWorthChart } from "@/components/monthly-net-worth-chart";
 import { TimeframeToggle } from "@/components/timeframe-toggle";
 import { CategoryDistribution } from "@/components/category-distribution";
 import { LedgerFilters } from "@/components/ledger-filters";
 import { Pagination } from "@/components/pagination";
 import { ImportDialog } from "@/components/import-dialog";
 import { EditTransactionDialog } from "@/components/edit-transaction-dialog";
-import { SortableAccountList } from "@/components/sortable-account-list"; // NEU
+import { SortableAccountList } from "@/components/sortable-account-list";
 import { deleteTransaction } from "./actions";
 
 export default async function FinanceCommandCenter({ 
@@ -51,29 +49,49 @@ export default async function FinanceCommandCenter({
     to?: string;
   }> 
 }) {
+  // 1. AUTHENTIFIZIERUNG PRÜFEN
+  const session = await auth();
+  
+  // Falls keine Session existiert, sofort zum Login umleiten
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const userId = session.user.id;
   const params = await searchParams;
   
-  // 1. PARAMETER INITIALISIERUNG
+  // 2. PARAMETER INITIALISIERUNG
   const range = params.range || '7D';
   const interval = params.interval || 'day';
   const query = params.q || '';
-  const filterAcc = params.acc || '';
-  const filterCat = params.cat || '';
+  const filterAcc = params.acc ? parseInt(params.acc) : null;
+  const filterCat = params.cat ? parseInt(params.cat) : null;
   const page = parseInt(params.page || '1');
   const limit = parseInt(params.limit || '10');
   const fromDateStr = params.from || '';
   const toDateStr = params.to || '';
 
-  // 2. DATENABFRAGE (KONTEN JETZT NACH SORT_ORDER)
-  const userAccounts = await db.select().from(accountTable).orderBy(asc(accountTable.sortOrder));
+  // 3. DATENABFRAGE (STRENG GEFILTERT NACH USER_ID)
+  const userAccounts = await db.select()
+    .from(accountTable)
+    .where(eq(accountTable.userId, userId))
+    .orderBy(asc(accountTable.sortOrder));
+
   const allCategories = await db.select().from(catTable);
-  const rawTransactions = await db.select().from(transTable).orderBy(asc(transTable.date));
-  const categoryLimits = await db.select().from(budgetTable);
+  
+  const rawTransactions = await db.select()
+    .from(transTable)
+    .where(eq(transTable.userId, userId))
+    .orderBy(asc(transTable.date));
+
+  const categoryLimits = await db.select()
+    .from(budgetTable)
+    .where(eq(budgetTable.userId, userId));
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  // 3. CHART-LOGIK (Equity Evolution)
+  // 4. CHART-LOGIK (Filtert nur User-Daten)
   let startDate = new Date(today);
   if (range === '7D') startDate.setDate(today.getDate() - 6);
   else if (range === '1M') startDate.setMonth(today.getMonth() - 1);
@@ -81,18 +99,18 @@ export default async function FinanceCommandCenter({
   else if (range === 'YTD') startDate = new Date(today.getFullYear(), 0, 1);
   else if (range === '1Y') startDate.setFullYear(today.getFullYear() - 1);
 
-  let runningBalance = rawTransactions.filter(t => t.date < startDate).reduce((sum, t) => sum + t.amount, 0);
+  let runningBalance = rawTransactions
+    .filter(t => new Date(t.date) < startDate)
+    .reduce((sum, t) => sum + t.amount, 0);
+
   let chartData: { date: string, balance: number }[] = [];
   let currentStep = new Date(startDate);
 
   while (currentStep <= today) {
     const stepNet = rawTransactions.filter(t => {
-      if (interval === 'day') return t.date.toDateString() === currentStep.toDateString();
-      if (interval === 'week') {
-        const next = new Date(currentStep); next.setDate(currentStep.getDate() + 7);
-        return t.date >= currentStep && t.date < next;
-      }
-      if (interval === 'month') return t.date.getMonth() === currentStep.getMonth() && t.date.getFullYear() === currentStep.getFullYear();
+      const d = new Date(t.date);
+      if (interval === 'day') return d.toDateString() === currentStep.toDateString();
+      if (interval === 'month') return d.getMonth() === currentStep.getMonth() && d.getFullYear() === currentStep.getFullYear();
       return false;
     }).reduce((sum, t) => sum + t.amount, 0);
 
@@ -104,13 +122,12 @@ export default async function FinanceCommandCenter({
     chartData.push({ date: label, balance: runningBalance });
 
     if (interval === 'day') currentStep.setDate(currentStep.getDate() + 1);
-    else if (interval === 'week') currentStep.setDate(currentStep.getDate() + 7);
     else if (interval === 'month') currentStep.setMonth(currentStep.getMonth() + 1);
   }
 
-  // 4. LEDGER FILTERUNG & PAGINATION
+  // 5. LEDGER FILTERUNG & PAGINATION
   const displayTransactions = [...rawTransactions].reverse().filter(t => {
-    const mQ = !query || t.description.toLowerCase().includes(query.toLowerCase()) || t.receiver?.toLowerCase().includes(query.toLowerCase());
+    const mQ = !query || t.description.toLowerCase().includes(query.toLowerCase()) || (t.receiver?.toLowerCase().includes(query.toLowerCase()));
     const mA = !filterAcc || t.accountId === filterAcc;
     const mC = !filterCat || t.categoryId === filterCat;
     
@@ -125,16 +142,16 @@ export default async function FinanceCommandCenter({
   const totalPages = Math.ceil(totalTransactions / limit);
   const paginatedTransactions = displayTransactions.slice((page - 1) * limit, page * limit);
 
-  // 5. SALDEN-BERECHNUNG FÜR KARTEN
+  // 6. SALDEN-BERECHNUNG
   const accountsWithBalance = userAccounts.map(acc => ({
     ...acc,
     balance: rawTransactions.filter(t => t.accountId === acc.id).reduce((sum, t) => sum + t.amount, 0)
   }));
   const totalBalance = accountsWithBalance.reduce((sum, a) => sum + a.balance, 0);
 
-  // 6. ANALYTICS
+  // 7. ANALYTICS
   const categoryMap: Record<string, number> = {};
-  rawTransactions.filter(t => t.date >= startDate && t.amount < 0).forEach(t => {
+  rawTransactions.filter(t => new Date(t.date) >= startDate && t.amount < 0).forEach(t => {
     const cat = allCategories.find(c => c.id === t.categoryId);
     if (cat?.name !== 'Transfer') {
       const label = cat ? `${cat.icon} ${cat.name}` : "Allgemein";
@@ -159,9 +176,17 @@ export default async function FinanceCommandCenter({
         </div>
 
         <nav className="space-y-4 flex-1">
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black uppercase tracking-widest bg-muted/50 rounded-2xl border border-border/50"><LayoutDashboard className="h-4 w-4"/> Dashboard</button>
+          <div className="w-full flex items-center gap-3 px-4 py-3 text-[11px] font-black uppercase tracking-widest bg-muted/50 rounded-2xl border border-border/50">
+            <LayoutDashboard className="h-4 w-4"/> Dashboard
+          </div>
           <AddCategoryDialog categories={allCategories} />
         </nav>
+
+        {/* USER INFO & LOGOUT */}
+        <div className="pt-6 border-t border-border/20">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Authenticated as</p>
+            <p className="text-xs font-bold text-foreground truncate">{session.user.email}</p>
+        </div>
       </aside>
 
       {/* MAIN CONTENT */}
@@ -177,12 +202,10 @@ export default async function FinanceCommandCenter({
             </div>
           </header>
 
-          {/* DRAGGABLE ACCOUNTS GRID */}
+          {/* ACCOUNTS LIST */}
           <SortableAccountList initialAccounts={accountsWithBalance} />
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-            
-            {/* LINKER BEREICH: CHARTS & LEDGER */}
             <div className="lg:col-span-8 space-y-12">
               <section className="space-y-6">
                 <div className="flex justify-between items-end px-2">
@@ -197,10 +220,9 @@ export default async function FinanceCommandCenter({
                 </Card>
               </section>
 
-              {/* LEDGER OPERATION CENTER */}
+              {/* LEDGER */}
               <section className="space-y-6">
                 <h2 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40 px-2 italic underline decoration-primary underline-offset-8">Operations Ledger</h2>
-                
                 <LedgerFilters accounts={userAccounts} categories={allCategories} />
                 
                 <div className="bg-card rounded-[40px] border border-border/40 shadow-2xl overflow-hidden min-h-[500px] flex flex-col">
@@ -211,7 +233,9 @@ export default async function FinanceCommandCenter({
                         const acc = userAccounts.find(a => a.id === t.accountId);
                         return (
                           <tr key={t.id} className="hover:bg-muted/10 transition-colors group">
-                            <td className="p-6 text-[10px] font-black text-muted-foreground tabular-nums whitespace-nowrap align-middle">{t.date.toLocaleDateString('de-DE')}</td>
+                            <td className="p-6 text-[10px] font-black text-muted-foreground tabular-nums whitespace-nowrap align-middle">
+                                {new Date(t.date).toLocaleDateString('de-DE')}
+                            </td>
                             <td className="p-6 align-middle">
                                <p className="text-sm font-black tracking-tight leading-tight text-foreground">{t.description}</p>
                                <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -242,19 +266,15 @@ export default async function FinanceCommandCenter({
                       })}
                     </tbody>
                   </table>
-
-                  {/* PAGINATION FOOTER */}
                   <div className="p-8 border-t border-border/10 bg-muted/5 flex flex-col md:flex-row justify-between items-center gap-6 mt-auto">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">
-                      Seite {page} von {totalPages} ({totalTransactions} Buchungen)
-                    </p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Seite {page} von {totalPages}</p>
                     <Pagination currentPage={page} totalPages={totalPages} />
                   </div>
                 </div>
               </section>
             </div>
 
-            {/* RECHTER BEREICH: ANALYTICS & BUDGETS */}
+            {/* ANALYTICS & BUDGETS */}
             <aside className="lg:col-span-4 space-y-12">
               <section className="space-y-6">
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 px-2 flex items-center gap-2 text-foreground">
@@ -264,21 +284,21 @@ export default async function FinanceCommandCenter({
                   <CategoryDistribution data={categoryData} />
                 </Card>
               </section>
-              
               <section className="space-y-6">
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-40 px-2 flex items-center gap-2 text-foreground">
                   <Target className="h-4 w-4" /> Monitoring Hub
                 </h2>
                 <div className="space-y-4">
                   {categoryLimits.map(limit => {
-                    const currentAmount = rawTransactions.filter(t => t.categoryId === limit.categoryId && t.amount < 0 && t.date.getMonth() === now.getMonth()).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                    const currentAmount = rawTransactions
+                        .filter(t => t.categoryId === limit.categoryId && t.amount < 0 && new Date(t.date).getMonth() === now.getMonth())
+                        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
                     return <BudgetItem key={limit.id} id={limit.id} category={allCategories.find(c => c.id === limit.categoryId)?.name || "Unbekannt"} limitAmount={limit.limitAmount} currentAmount={currentAmount} />;
                   })}
                   <AddBudgetDialog categories={allCategories} />
                 </div>
               </section>
             </aside>
-
           </div>
         </div>
       </main>

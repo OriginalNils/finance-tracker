@@ -1,60 +1,139 @@
-// db/schema.ts
-import { 
-  pgTable, 
-  uuid, 
-  text, 
-  timestamp, 
-  doublePrecision, 
+import {
+  timestamp,
+  pgTable,
+  text,
+  primaryKey,
   integer,
-  AnyPgColumn // <--- DIESEN TYP HINZUFÜGEN
+  serial,
 } from "drizzle-orm/pg-core";
+import type { AdapterAccount } from "next-auth/adapters";
 
-export const accounts = pgTable('accounts', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  // NEU: Feld für die Sortierung
-  sortOrder: integer('sort_order').default(0).notNull(),
+
+/**
+ * --- AUTHENTIFIZIERUNG (AUTH.JS TABELLEN) ---
+ */
+
+export const users = pgTable("user", {
+  id: text("id").notNull().primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name"),
+  email: text("email").notNull().unique(),
+  password: text("password"),
+  emailVerified: timestamp("emailVerified", { mode: "date" }),
+  image: text("image"),
 });
 
-export const categories = pgTable('categories', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  // DIESE ZEILE STEUERT DAS LÖSCHEN DER SUBS IN DER DB:
-  parentId: uuid('parent_id').references((): AnyPgColumn => categories.id, { onDelete: 'cascade' }),
-  icon: text('icon').default('📁'),
-});
+export const accounts = pgTable(
+  "account",
+  {
+    userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").$type<AdapterAccount["type"]>().notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("providerAccountId").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
+  },
+  (account) => ({
+    compoundKey: primaryKey({ columns: [account.provider, account.providerAccountId] }),
+  })
+);
 
-export const transactions = pgTable('transactions', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
-  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'cascade' }).notNull(),
-  description: text('description').notNull(),
-  amount: doublePrecision('amount').notNull(),
-  type: text('type').$type<'income' | 'expense'>().notNull(),
-  date: timestamp('date').defaultNow().notNull(),
-  
-  // NEUE FELDER:
-  receiver: text('receiver'),
-  receiverIban: text('receiver_iban'),
-  details: text('details'),
-});
-
-export const budgets = pgTable('budgets', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  categoryId: uuid('category_id')
-    .references(() => categories.id, { onDelete: 'cascade' }) // DIESE ZEILE IST KRITISCH
+export const sessions = pgTable("session", {
+  sessionToken: text("sessionToken").notNull().primaryKey(),
+  userId: text("userId")
     .notNull()
-    .unique(),
-  limitAmount: doublePrecision('limit_amount').notNull(),
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: timestamp("expires", { mode: "date" }).notNull(),
 });
 
-export const subscriptions = pgTable('subscriptions', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  amount: doublePrecision('amount').notNull(),
-  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
-  categoryId: uuid('category_id').references(() => categories.id).notNull(),
-  interval: text('interval').notNull(), // 'monthly', 'yearly', etc.
-  startDate: timestamp('start_date').defaultNow().notNull(),
-  lastExecuted: timestamp('last_executed'),
+export const verificationTokens = pgTable(
+  "verificationToken",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: timestamp("expires", { mode: "date" }).notNull(),
+  },
+  (vt) => ({
+    compoundKey: primaryKey({ columns: [vt.identifier, vt.token] }),
+  })
+);
+
+
+/**
+ * --- FINANZ-TABELLEN ---
+ */
+
+export const bankAccounts = pgTable("bank_accounts", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  parentId: integer("parent_id").references((): any => categories.id, { onDelete: "cascade" }),
+  icon: text("icon").default("📁"),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const transactions = pgTable("transactions", {
+  id: serial("id").primaryKey(),
+  amount: integer("amount").notNull(), // In Cent! (1000 = 10,00€)
+  description: text("description"),
+  accountId: integer("accountId")
+    .notNull()
+    .references(() => bankAccounts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id")
+    .references(() => categories.id, { onDelete: "set null" }),
+  type: text("type").notNull().$type<'income' | 'expense'>(),
+  receiver: text("receiver"),
+  receiverIban: text("receiver_iban"),
+  details: text("details"),
+  date: timestamp("date").notNull(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const budgets = pgTable("budgets", {
+  id: serial("id").primaryKey(),
+  categoryId: integer("category_id")
+    .notNull()
+    .references(() => categories.id, { onDelete: "cascade" }),
+  limitAmount: integer("limit_amount").notNull(), // In Cent
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  amount: integer("amount").notNull(), // In Cent
+  accountId: integer("account_id")
+    .notNull()
+    .references(() => bankAccounts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id")
+    .notNull()
+    .references(() => categories.id, { onDelete: "cascade" }),
+  interval: text("interval").notNull().default("monthly"),
+  startDate: timestamp("start_date").notNull(),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
 });

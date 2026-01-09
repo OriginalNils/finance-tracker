@@ -2,7 +2,7 @@
 'use server'
 
 import { db } from "@/db";
-import { transactions, budgets, accounts, categories } from "@/db/schema";
+import { transactions, budgets, bankAccounts as accounts, categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { subscriptions as subTable } from "@/db/schema";
