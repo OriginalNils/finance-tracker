@@ -53,14 +53,18 @@ export async function deleteAccount(id: string) {
 
 // --- KATEGORIEN (CATEGORIES) ---
 export async function addCategory(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   const name = formData.get("name") as string;
   const parentId = formData.get("parentId") as string;
   const icon = formData.get("icon") as string;
 
   await db.insert(categories).values({
     name,
-    parentId: parentId === "" ? null : parentId,
+    parentId: parentId === "" ? null : parseInt(parentId), // <-- parseInt() hinzufügen!
     icon: icon || '📁',
+    userId: session.user.id,
   });
 
   revalidatePath("/");
