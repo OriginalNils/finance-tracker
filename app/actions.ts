@@ -44,7 +44,10 @@ export async function addAccount(formData: FormData) {
 }
 
 export async function deleteAccount(id: string) {
-  await db.delete(accounts).where(eq(accounts.id, id));
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
+  await db.delete(accounts).where(eq(accounts.id, parseInt(id))); // <-- parseInt()
   revalidatePath("/");
 }
 
@@ -127,7 +130,10 @@ export async function addTransfer(formData: FormData) {
 }
 
 export async function deleteTransaction(id: string) {
-  await db.delete(transactions).where(eq(transactions.id, id));
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
+  await db.delete(transactions).where(eq(transactions.id, parseInt(id))); // <-- parseInt()
   revalidatePath("/");
 }
 
@@ -148,7 +154,10 @@ export async function upsertBudget(formData: FormData) {
 }
 
 export async function deleteBudget(id: string) {
-  await db.delete(budgets).where(eq(budgets.id, id));
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
+  await db.delete(budgets).where(eq(budgets.id, parseInt(id))); // <-- parseInt()
   revalidatePath("/");
 }
 
@@ -173,11 +182,11 @@ export async function importTransactions(transactionsList: any[]) {
 }
 
 export async function deleteCategory(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   try {
-    // Dank ON DELETE CASCADE in der DB werden Budgets und Transaktionen 
-    // jetzt automatisch mitgelöscht. Wir müssen nur den Befehl geben.
-    await db.delete(categories).where(eq(categories.id, id));
-    
+    await db.delete(categories).where(eq(categories.id, parseInt(id))); // <-- parseInt()
     revalidatePath("/");
   } catch (error) {
     console.error("Fehler beim Löschen der Kategorie:", error);
@@ -187,13 +196,16 @@ export async function deleteCategory(id: string) {
 
 
 export async function updateTransaction(id: string, formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   const amount = parseFloat(formData.get("amount") as string);
   const type = formData.get("type") as 'income' | 'expense';
   const dateStr = formData.get("date") as string;
 
   await db.update(transactions).set({
-    accountId: formData.get("accountId") as string,
-    categoryId: formData.get("categoryId") as string,
+    accountId: parseInt(formData.get("accountId") as string),
+    categoryId: parseInt(formData.get("categoryId") as string),
     description: formData.get("description") as string,
     amount: type === 'expense' ? -Math.abs(amount) : Math.abs(amount),
     type: type,
@@ -201,17 +213,20 @@ export async function updateTransaction(id: string, formData: FormData) {
     receiver: formData.get("receiver") as string || null,
     receiverIban: formData.get("receiver_iban") as string || null,
     details: formData.get("details") as string || null,
-  }).where(eq(transactions.id, id));
+  }).where(eq(transactions.id, parseInt(id))); // <-- parseInt()
 
   revalidatePath("/");
 }
 
+
 export async function reorderAccounts(orderedIds: string[]) {
-  // Wir gehen die Liste der IDs durch und setzen den sortOrder entsprechend des Index
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   for (let i = 0; i < orderedIds.length; i++) {
     await db.update(accounts)
       .set({ sortOrder: i })
-      .where(eq(accounts.id, orderedIds[i]));
+      .where(eq(accounts.id, parseInt(orderedIds[i]))); // <-- parseInt()
   }
   revalidatePath("/");
 }
