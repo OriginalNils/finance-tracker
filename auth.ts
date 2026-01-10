@@ -20,12 +20,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        console.log("--- LOGIN DEBUG START ---");
+        console.log("Input Email:", credentials.email);
+        console.log("Input Password:", credentials.password);
+
         // 1. User in der Datenbank suchen
         const user = await db.query.users.findFirst({
           where: eq(users.email, credentials.email as string),
         });
 
-        if (!user || !user.password) return null;
+        if (!user) {
+            console.log("❌ FEHLER: User nicht in DB gefunden!");
+            return null;
+        } else {
+            console.log("✅ User gefunden:", user.email);
+            console.log("Gespeicherter Hash:", user.password);
+        }
 
         // 2. Passwort mit bcrypt vergleichen
         const isPasswordCorrect = await bcrypt.compare(
@@ -33,7 +43,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.password
         );
 
-        if (!isPasswordCorrect) return null;
+        console.log("Passwort-Vergleich Ergebnis:", passwordsMatch);
+
+        if (!isPasswordCorrect) {
+            console.log("❌ FEHLER: Passwort stimmt nicht überein!");
+            return null;
+        }
+
+        console.log("✅ LOGIN ERFOLGREICH!");
+        console.log("--- LOGIN DEBUG END ---");
 
         return {
           id: user.id,
@@ -53,3 +71,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
