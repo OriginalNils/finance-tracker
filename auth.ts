@@ -43,7 +43,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.password
         );
 
-        console.log("Passwort-Vergleich Ergebnis:", passwordsMatch);
+        console.log("Passwort-Vergleich Ergebnis:", isPasswordCorrect);
 
         if (!isPasswordCorrect) {
             console.log("❌ FEHLER: Passwort stimmt nicht überein!");
