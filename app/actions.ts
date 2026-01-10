@@ -72,35 +72,40 @@ export async function addCategory(formData: FormData) {
 
 // --- TRANSAKTIONEN (TRANSACTIONS) ---
 export async function addTransaction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   const amount = parseFloat(formData.get("amount") as string);
   const type = formData.get("type") as 'income' | 'expense';
   
   await db.insert(transactions).values({
-    accountId: formData.get("accountId") as string,
-    categoryId: formData.get("categoryId") as string,
+    accountId: parseInt(formData.get("accountId") as string),      // <-- parseInt()
+    categoryId: parseInt(formData.get("categoryId") as string),    // <-- parseInt()
     description: formData.get("description") as string,
     amount: type === 'expense' ? -Math.abs(amount) : Math.abs(amount),
     type: type,
     date: formData.get("date") ? new Date(formData.get("date") as string) : new Date(),
-    
-    // NEU:
     receiver: formData.get("receiver") as string || null,
     receiverIban: formData.get("receiver_iban") as string || null,
     details: formData.get("details") as string || null,
+    userId: session.user.id,
   });
   revalidatePath("/");
 }
 
 // --- UMBUCHUNGEN (TRANSFERS) ---
+// addTransfer Funktion - Zeile ~95-135
 export async function addTransfer(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   const amount = parseFloat(formData.get("amount") as string);
-  const fromId = formData.get("fromAccountId") as string;
-  const toId = formData.get("toAccountId") as string;
+  const fromId = parseInt(formData.get("fromAccountId") as string);  // <-- schon parseInt()
+  const toId = parseInt(formData.get("toAccountId") as string);      // <-- schon parseInt()
   const description = formData.get("description") as string;
   const dateStr = formData.get("date") as string;
   const date = dateStr ? new Date(dateStr) : new Date();
 
-  // Hinweis: Erstelle eine Kategorie "Transfer" im Editor, damit das System sie findet!
   const [transferCat] = await db.select()
     .from(categories)
     .where(eq(categories.name, 'Transfer'))
@@ -110,24 +115,26 @@ export async function addTransfer(formData: FormData) {
     throw new Error("Bitte erstelle zuerst eine Kategorie namens 'Transfer'!");
   }
 
-  // 1. Abgang
+  // 1. Abgang - fromId ist bereits number
   await db.insert(transactions).values({
-    accountId: fromId,
-    categoryId: transferCat.id,
+    accountId: fromId,           // <-- Keine Änderung nötig, ist schon number
+    categoryId: transferCat.id,  // <-- Keine Änderung nötig
     description: `-> ${description || 'Umbuchung'}`,
     amount: -Math.abs(amount),
     type: 'expense',
     date: date,
+    userId: session.user.id,
   });
 
-  // 2. Eingang
+  // 2. Eingang - toId ist bereits number
   await db.insert(transactions).values({
-    accountId: toId,
-    categoryId: transferCat.id,
+    accountId: toId,             // <-- Keine Änderung nötig, ist schon number
+    categoryId: transferCat.id,  // <-- Keine Änderung nötig
     description: `<- ${description || 'Umbuchung'}`,
     amount: Math.abs(amount),
     type: 'income',
     date: date,
+    userId: session.user.id,
   });
 
   revalidatePath("/");
@@ -143,15 +150,26 @@ export async function deleteTransaction(id: string) {
 
 // --- BUDGETS ---
 export async function upsertBudget(formData: FormData) {
-  const categoryId = formData.get("categoryId") as string;
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
+  const categoryId = parseInt(formData.get("categoryId") as string);  // <-- parseInt()
   const limitAmount = parseFloat(formData.get("limitAmount") as string);
 
-  const existing = await db.select().from(budgets).where(eq(budgets.categoryId, categoryId));
+  const existing = await db.select()
+    .from(budgets)
+    .where(eq(budgets.categoryId, categoryId));  // <-- Jetzt ist categoryId number
 
   if (existing.length > 0) {
-    await db.update(budgets).set({ limitAmount }).where(eq(budgets.categoryId, categoryId));
+    await db.update(budgets)
+      .set({ limitAmount })
+      .where(eq(budgets.categoryId, categoryId));  // <-- Jetzt ist categoryId number
   } else {
-    await db.insert(budgets).values({ categoryId, limitAmount });
+    await db.insert(budgets).values({ 
+      categoryId,      // <-- Jetzt number
+      limitAmount,
+      userId: session.user.id,
+    });
   }
 
   revalidatePath("/");
@@ -165,8 +183,11 @@ export async function deleteBudget(id: string) {
   revalidatePath("/");
 }
 
-
+// importTransactions Funktion - Zeile ~177-195
 export async function importTransactions(transactionsList: any[]) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   if (transactionsList.length === 0) return;
 
   await db.insert(transactions).values(transactionsList.map(t => ({
@@ -177,9 +198,9 @@ export async function importTransactions(transactionsList: any[]) {
     receiverIban: t.receiverIban || null,
     details: t.details || null,
     amount: t.amount,
-    // HIER DIE ÄNDERUNG: "as const" oder expliziter Type-Cast
     type: (t.amount < 0 ? 'expense' : 'income') as 'expense' | 'income', 
     date: new Date(t.date),
+    userId: session.user.id,  // <-- DIESE ZEILE HINZUFÜGEN!
   })));
 
   revalidatePath("/");
@@ -236,39 +257,43 @@ export async function reorderAccounts(orderedIds: string[]) {
 }
 
 export async function addSubscription(formData: FormData) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
   const amount = parseFloat(formData.get("amount") as string);
   
   await db.insert(subTable).values({
     name: formData.get("name") as string,
     amount: amount,
-    accountId: formData.get("accountId") as string,
-    categoryId: formData.get("categoryId") as string,
+    accountId: parseInt(formData.get("accountId") as string),    // <-- parseInt()
+    categoryId: parseInt(formData.get("categoryId") as string),  // <-- parseInt()
     interval: formData.get("interval") as string || 'monthly',
     startDate: new Date(formData.get("startDate") as string || new Date()),
+    userId: session.user.id,
   });
 
   revalidatePath("/");
 }
 
 export async function addSplit(formData: FormData) {
-  // Wir extrahieren die Basisdaten
-  const accountId = formData.get("accountId") as string;
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Not authenticated");
+  
+  const accountId = parseInt(formData.get("accountId") as string);  // <-- schon parseInt()
   const date = new Date(formData.get("date") as string || new Date());
   const description = formData.get("description") as string;
 
-  // Die Teilbuchungen kommen oft als JSON-String oder indexierte Felder
-  // Hier ein robustes Beispiel für die Verarbeitung:
   const splitDataRaw = formData.get("splits") as string;
-  const splits = JSON.parse(splitDataRaw) as Array<{ categoryId: string, amount: number }>;
+  const splits = JSON.parse(splitDataRaw) as Array<{ categoryId: number, amount: number }>;
 
-  // Wir erstellen für jeden Teil des Splits eine eigene Buchung
   const transactionsToInsert = splits.map(s => ({
-    accountId,
-    categoryId: s.categoryId,
+    accountId,           // <-- ist schon number
+    categoryId: s.categoryId,  // <-- ist schon number
     description: `${description} (Teilbetrag)`,
     amount: s.amount,
     type: s.amount < 0 ? 'expense' : 'income' as 'expense' | 'income',
     date: date,
+    userId: session.user.id,  // <-- HINZUGEFÜGT!
   }));
 
   if (transactionsToInsert.length > 0) {
