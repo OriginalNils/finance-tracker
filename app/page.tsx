@@ -254,7 +254,7 @@ export default async function FinanceCommandCenter({
                             <td className="p-6 text-center align-middle">
                               <div className="flex items-center justify-center gap-1">
                                 <EditTransactionDialog t={t} accounts={userAccounts} categories={allCategories} />
-                                <form action={async () => { 'use server'; await deleteTransaction(t.id); }}>
+                                <form action={async () => { 'use server'; await deleteTransaction(t.id.toString()); }}>
                                   <button className="p-2 text-muted-foreground/10 hover:text-rose-500 transition-all active:scale-90">
                                     <Trash2 className="h-4 w-4" />
                                   </button>

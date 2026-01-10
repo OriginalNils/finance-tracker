@@ -6,7 +6,7 @@ import { deleteBudget } from "@/app/actions";
 import { Trash2, AlertTriangle, X, Check } from "lucide-react";
 
 interface BudgetItemProps {
-  id: string;
+  id: number;
   category: string;
   limitAmount: number;
   currentAmount: number;
@@ -51,7 +51,7 @@ export function BudgetItem({ id, category, limitAmount, currentAmount }: BudgetI
           </div>
           <div className="flex gap-2">
             <button 
-              onClick={async () => { await deleteBudget(id); setShowConfirm(false); }}
+              onClick={async () => { await deleteBudget(id.toString()); setShowConfirm(false); }}
               className="p-2 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
             >
               <Check className="h-3 w-3" />
