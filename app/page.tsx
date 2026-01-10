@@ -1,5 +1,5 @@
 // app/page.tsx
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { 
@@ -16,6 +16,7 @@ import {
   PieChart as PieIcon, 
   Target, 
   User,
+  LogOut
 } from "lucide-react";
 
 // Komponenten-Imports
@@ -183,9 +184,25 @@ export default async function FinanceCommandCenter({
         </nav>
 
         {/* USER INFO & LOGOUT */}
-        <div className="pt-6 border-t border-border/20">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Authenticated as</p>
-            <p className="text-xs font-bold text-foreground truncate">{session.user.email}</p>
+        <div className="pt-6 border-t border-border/20 space-y-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Authenticated as</p>
+              <p className="text-xs font-bold text-foreground truncate">{session.user.name} ({session.user.email})</p>
+            </div>
+
+            <form
+              action={async () => {
+                "use server";
+                await signOut({ redirectTo: "/login" });
+              }}
+            >
+              <button 
+                type="submit" 
+                className="w-full flex items-center gap-2 px-0 py-2 text-[10px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-400 transition-colors text-left"
+              >
+                <LogOut className="h-3 w-3" /> Terminate Session
+              </button>
+            </form>
         </div>
       </aside>
 

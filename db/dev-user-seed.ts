@@ -3,12 +3,12 @@ import { users } from "./schema";
 import bcrypt from "bcryptjs";
 
 async function main() {
-  const hashedPassword = await bcrypt.hash("financepassword123", 10);
+  const hashedPassword = await bcrypt.hash("financedev", 10);
   
   await db.insert(users).values({
-    email: "test@test.com",
+    email: "dev@dev.com",
     password: hashedPassword,
-    name: "Test",
+    name: "Developer",
   });
 
   console.log("User wurde erfolgreich angelegt!");
